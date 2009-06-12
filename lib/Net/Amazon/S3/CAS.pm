@@ -210,7 +210,7 @@ sub entry_headers {
 sub entry_headers_etag {
     my ( $self, $entry ) = @_;
 
-    return ( ETag => $entry->key ),
+    return ( ETag => $entry->key ), # Amazon seems to ignore this and use MD5, but who cares
 }
 
 sub entry_headers_cache {
