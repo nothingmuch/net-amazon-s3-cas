@@ -3,6 +3,7 @@ use Moose;
 
 use HTTP::Date;
 use Carp;
+use File::Basename;
 
 use namespace::clean -except => 'meta';
 
@@ -48,6 +49,25 @@ has prune => (
     is  => "ro",
 );
 
+has include_name => (
+    isa => "Bool",
+    is  => "ro",
+    default => 0,
+);
+
+has only_basename => (
+    isa => "Bool",
+    is  => "ro",
+    default => 1,
+);
+
+has delimiter => (
+    isa => "Str",
+    is  => "ro",
+    default => ".",
+);
+
+
 sub sync {
     my $self = shift;
 
@@ -55,15 +75,24 @@ sub sync {
 
     my %keys;
 
-    my $filtered = $stream->filter(sub {[ grep { !$keys{$self->entry_key($_)}++ } @$_ ]});
-
     my $pm = $self->fork_manager;
 
-    while ( my $block = $filtered->next ) {
+    while ( my $block = $stream->next ) {
+
+        my %entries;
+
         foreach my $entry ( @$block ) {
+            my $key = $self->entry_key($entry);
+
+            unless ( $keys{$key}++ ) {
+                $entries{$key} = $entry;
+            }
+        }
+
+        foreach my $key ( keys %entries ) {
             $pm->start and next if $pm;
 
-            $self->sync_entry($entry);
+            $self->sync_entry( $key, $entries{$key} );
 
             $pm->finish if $pm;
         }
@@ -93,10 +122,10 @@ sub prune_keys {
 }
 
 sub sync_entry {
-    my ( $self, $entry ) = @_;
+    my ( $self, $key, $entry ) = @_;
 
-    unless ( $self->verify_entry($entry) ) {
-        $self->upload_entry($entry);
+    unless ( $self->verify_entry($key, $entry) ) {
+        $self->upload_entry($key, $entry);
     }
 }
 
@@ -109,13 +138,23 @@ sub mangle_key {
 sub entry_key {
     my ( $self, $entry ) = @_;
 
-    $self->mangle_key( $entry->key );
+    my $key = $entry->key;
+
+    if ( $self->include_name && defined(my $name = $entry->name) ) {
+        local $File::Basename::Fileparse_igncase = 1;
+        my ( $basename, $path, $ext ) = fileparse($name, qr/\.(?:[^\.\s]+)/);
+
+        return $self->mangle_key( join $self->delimiter, ( $self->only_basename ? $basename : $name ), $key . $ext );
+    } else {
+        return $self->mangle_key( $key );
+    }
 }
 
-sub verify_entry {
-    my ( $self, $entry ) = @_;
 
-    if ( my $head = $self->bucket->head_key( $self->entry_key($entry) ) ) {
+sub verify_entry {
+    my ( $self, $key, $entry ) = @_;
+
+    if ( my $head = $self->bucket->head_key($key) ) {
         if ( $head->{"content-length"} == $entry->size ) {
             return 1;
         }
@@ -123,31 +162,31 @@ sub verify_entry {
 }
 
 sub upload_entry {
-    my ( $self, $entry ) = @_;
+    my ( $self, $key, $entry ) = @_;
+
+    $self->bucket->delete_key($key);
 
     if ( $entry->prefer_handle && $entry->can("filename") ) {
-        $self->upload_entry_file($entry);
+        $self->upload_entry_file($key, $entry);
     } else {
-        $self->upload_entry_string($entry);
+        $self->upload_entry_string($key, $entry);
     }
 
-    unless ( $self->verify_entry($entry) ) {
+    unless ( $self->verify_entry($key, $entry) ) {
         croak "Uploading of " . $entry->key . " failed";
     }
 }
 
 sub upload_entry_file {
-    my ( $self, $entry ) = @_;
+    my ( $self, $key, $entry ) = @_;
 
-    $self->bucket->delete_key($self->entry_key($entry));
-    $self->bucket->add_key_filename( $self->entry_key($entry), $entry->blob->filename, $self->entry_headers($entry) );
+    $self->bucket->add_key_filename( $key, $entry->blob->filename, $self->entry_headers($entry) );
 }
 
 sub upload_entry_string {
-    my ( $self, $entry ) = @_;
+    my ( $self, $key, $entry ) = @_;
 
-    $self->bucket->delete_key($self->entry_key($entry));
-    $self->bucket->add_key( $self->entry_key($entry), scalar($entry->slurp), $self->entry_headers($entry) );
+    $self->bucket->add_key( $key, scalar($entry->slurp), $self->entry_headers($entry) );
 }
 
 sub entry_headers {
