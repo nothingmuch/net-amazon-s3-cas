@@ -49,6 +49,12 @@ has prune => (
     is  => "ro",
 );
 
+has public => (
+    isa => "Bool",
+    is  => "ro",
+    default => 1,
+);
+
 has include_name => (
     isa => "Bool",
     is  => "ro",
@@ -193,6 +199,7 @@ sub entry_headers {
     my ( $self, $entry ) = @_;
 
     return {
+        ( $self->public ? ( acl_short => "public-read" ) : () ),
         $self->entry_headers_etag($entry),
         $self->entry_headers_cache($entry),
         $self->entry_headers_extra($entry),
