@@ -35,23 +35,6 @@ has keyspace => (
     }
 );
 
-has mime_types_directory => (
-    isa        => "Object",
-    handles    => [qw(mimeTypeOf)],
-    lazy_build => 1,
-);
-
-sub _build_mime_types_directory {
-    require MIME::Types;
-    MIME::Types->new;
-}
-
-has guess_mimetype => (
-    isa     => "Bool",
-    is      => "ro",
-    default => 1,
-);
-
 sub file_stream {
     my $self = shift;
 
@@ -78,20 +61,7 @@ sub file_to_entry {
         blob    => $blob,
         key     => $self->blob_to_key($blob),
         name    => $file->stringify,
-        headers => $self->file_to_headers($file),
     );
-}
-
-sub file_to_headers {
-    my ( $self, $file ) = @_;
-
-    my %headers;
-
-    if ( $self->guess_mimetype ) {
-        $headers{'Content-Type'} = $self->mimeTypeOf($file->stringify);
-    }
-
-    return \%headers;
 }
 
 __PACKAGE__->meta->make_immutable;

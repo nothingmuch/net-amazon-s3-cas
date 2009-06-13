@@ -44,6 +44,12 @@ has max_age => (
     default => 10 * 365 * 24 * 60 * 60, # 10 years
 );
 
+has guess_mimetype => (
+    isa     => "Bool",
+    is      => "ro",
+    default => 1,
+);
+
 has prune => (
     isa => "Bool",
     is  => "ro",
@@ -73,6 +79,19 @@ has delimiter => (
     default => ".",
 );
 
+
+
+has mime_types_directory => (
+    isa        => "Object",
+    handles    => [qw(mimeTypeOf)],
+    lazy_build => 1,
+);
+
+
+sub _build_mime_types_directory {
+    require MIME::Types;
+    MIME::Types->new;
+}
 
 sub sync {
     my $self = shift;
@@ -202,6 +221,7 @@ sub entry_headers {
         ( $self->public ? ( acl_short => "public-read" ) : () ),
         $self->entry_headers_etag($entry),
         $self->entry_headers_cache($entry),
+        $self->entry_headers_type($entry),
         $self->entry_headers_extra($entry),
         %{ $entry->headers },
     };
@@ -225,6 +245,20 @@ sub entry_headers_cache {
         return ();
     }
 }
+
+sub entry_headers_type {
+    my ( $self, $entry ) = @_;
+
+    if ( $self->guess_mimetype and my $name = $entry->name ) {
+        if ( my $type = $self->mimeTypeOf($name) ) {
+            return ( 'Content-Type' => $type );
+        }
+    }
+
+    return ();
+}
+
+
 
 sub entry_headers_extra {
     my ( $self, $entry ) = @_;
