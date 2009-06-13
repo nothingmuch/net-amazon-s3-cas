@@ -29,6 +29,8 @@ use ok "Net::Amazon::S3::CAS";
 
     use asa 'Net::Amazon::S3::Bucket';
 
+    sub bucket { "foo" }
+
     has storage => (
         metaclass => "Collection::Hash",
         isa => HashRef[HashRef],

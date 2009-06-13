@@ -4,6 +4,7 @@ use Moose;
 use HTTP::Date;
 use Carp;
 use File::Basename;
+use MooseX::Types::URI qw(Uri);
 
 use namespace::clean -except => 'meta';
 
@@ -79,6 +80,17 @@ has delimiter => (
     default => ".",
 );
 
+has base_uri => (
+    isa => Uri,
+    is  => "ro",
+    coerce => 1,
+    lazy_build => 1,
+);
+
+sub _build_base_uri {
+    my $self = shift;
+    return URI::->new( "http://s3.amazonaws.com/" . $self->bucket->bucket . "/" );
+}
 
 
 has mime_types_directory => (
@@ -102,6 +114,8 @@ sub sync {
 
     my $pm = $self->fork_manager;
 
+    my %uris;
+
     while ( my $block = $stream->next ) {
 
         my %entries;
@@ -115,9 +129,15 @@ sub sync {
         }
 
         foreach my $key ( keys %entries ) {
+            my $entry = $entries{$key};
+
+            if ( my $name = $entry->name ) {
+                $uris{$name} = $self->entry_uri($key, $entry);
+            }
+
             $pm->start and next if $pm;
 
-            $self->sync_entry( $key, $entries{$key} );
+            $self->sync_entry($key, $entry);
 
             $pm->finish if $pm;
         }
@@ -126,6 +146,8 @@ sub sync {
     if ( $self->prune ) {
         $self->prune_keys(\%keys);
     }
+
+    return \%uris;
 }
 
 sub prune_keys {
@@ -152,6 +174,16 @@ sub sync_entry {
     unless ( $self->verify_entry($key, $entry) ) {
         $self->upload_entry($key, $entry);
     }
+}
+
+sub entry_uri {
+    my ( $self, $key, $entry ) = @_;
+
+    my $c = $self->base_uri->clone;
+
+    $c->path( $c->path . $key );
+
+    return $c;
 }
 
 sub mangle_key {
