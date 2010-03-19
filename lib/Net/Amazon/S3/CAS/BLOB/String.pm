@@ -16,8 +16,13 @@ has data => (
 has name => (
     isa => "Str",
     is  => "ro",
-    predicate => "has_name",
+    reader    => "_name",
+    predicate => "_has_name",
 );
+
+# fucking roles
+sub name { shift->_name }
+sub has_name { shift->_has_name }
 
 sub size {
     my $self = shift;
