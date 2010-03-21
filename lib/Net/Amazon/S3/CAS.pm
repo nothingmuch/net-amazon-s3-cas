@@ -147,6 +147,8 @@ sub sync {
         $self->prune_keys(\%keys);
     }
 
+    $pm->wait_all_children if $pm;
+
     return \%uris;
 }
 
