@@ -137,6 +137,10 @@ sub sync {
 
             $pm->start and next if $pm;
 
+            # nasty hack
+            no warnings 'redefine';
+            local *Git::DESTROY = sub { } if $pm;
+
             $self->sync_entry($key, $entry);
 
             $pm->finish if $pm;
