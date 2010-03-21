@@ -74,11 +74,23 @@ has only_basename => (
     default => 1,
 );
 
+has hash_as_dir => (
+    isa => "Bool",
+    is  => "ro",
+    default => 0,
+);
+
 has delimiter => (
     isa => "Str",
     is  => "ro",
-    default => ".",
+    lazy_build => 1,
 );
+
+sub _build_delimiter {
+    my $self = shift;
+
+    return ( $self->hash_as_dir ? "/" : "." );
+}
 
 has base_uri => (
     isa => Uri,
@@ -207,9 +219,20 @@ sub entry_key {
         local $File::Basename::Fileparse_igncase = 1;
         my ( $basename, $path, $ext ) = fileparse($name, qr/\.(?:[^\.\s]+)/);
 
-        return $self->mangle_key( join $self->delimiter, ( $self->only_basename ? $basename : $name ), $key . $ext );
+        my $filename = ( $self->only_basename ? $basename : $name );
+
+        return $self->mangle_key(
+            join(
+                $self->delimiter,
+                ( $self->hash_as_dir
+                    ? ( $key, $filename )
+                    : ( $filename, $key )
+                )
+            )
+            . $ext
+        );
     } else {
-        return $self->mangle_key( $key );
+        return $self->mangle_key($key);
     }
 }
 
