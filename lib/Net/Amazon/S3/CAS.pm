@@ -8,6 +8,21 @@ use MooseX::Types::URI qw(Uri);
 
 use namespace::clean -except => 'meta';
 
+has verbose => (
+    isa => "Bool",
+    is  => "ro",
+);
+
+sub v {
+    my ( $self, @msg ) = @_;
+
+    return unless $self->verbose;
+
+    local $\ = "\n";
+    local $, = " ";
+    print STDERR @msg;
+}
+
 has fork_manager => (
     isa => "Object",
     is  => "ro",
@@ -128,6 +143,8 @@ sub sync {
 
     my %uris;
 
+    $self->v("syncing keys");
+
     while ( my $block = $stream->next ) {
 
         my %entries;
@@ -171,6 +188,8 @@ sub sync {
 sub prune_keys {
     my ( $self, $keys ) = @_;
 
+    $self->v("pruning keys");
+
     my @keys = map { $_->{key} } @{ $self->bucket->list_all({ prefix => $self->prefix })->{keys} };
 
     my @prune = grep { not exists $keys->{$_} } @keys;
@@ -179,6 +198,8 @@ sub prune_keys {
 
     foreach my $key ( @prune ) {
         $pm->start and next if $pm;
+
+        $self->v("deleting $key");
 
         $self->bucket->delete_key($key);
 
@@ -240,6 +261,8 @@ sub entry_key {
 sub verify_entry {
     my ( $self, $key, $entry ) = @_;
 
+    $self->v("checking $key");
+
     if ( my $head = $self->bucket->head_key($key) ) {
         if ( $head->{"content-length"} == $entry->size ) {
             return 1;
@@ -249,6 +272,8 @@ sub verify_entry {
 
 sub upload_entry {
     my ( $self, $key, $entry ) = @_;
+
+    $self->v("uploading $key");
 
     $self->bucket->delete_key($key);
 
